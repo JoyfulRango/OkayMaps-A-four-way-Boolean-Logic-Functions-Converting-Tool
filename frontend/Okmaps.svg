@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+          <!-- Smooth Rounded Background App Icon Bubble -->
+          <rect width="512" height="512" rx="112" fill="#0d1117"/>
+          
+          <!-- The 2x2 Karnaugh Map / Logic Circuit Grid Layer -->
+          <g stroke="#21262d" stroke-width="6" stroke-dasharray="2,8">
+            <line x1="156" y1="256" x2="356" y2="256" />
+            <line x1="256" y1="156" x2="256" y2="356" />
+          </g>
+          
+          <!-- Outer Bound Grid Border -->
+          <rect x="156" y="156" width="200" height="200" rx="16" fill="none" stroke="#30363d" stroke-width="4"/>
+
+          <!-- Logic Traces / Signal Paths forming "O" and "K" connections -->
+          <!-- "O" Loop Side (Left half) -->
+          <path d="M 206,206 L 256,206 L 256,306 L 206,306 Z" fill="none" stroke="#00f2fe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.85"/>
+          
+          <!-- "K" Branching Side (Right half) -->
+          <path d="M 256,206 L 306,206 M 256,256 L 306,206 M 256,256 L 306,306 M 256,306 L 306,306" fill="none" stroke="#4facfe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+
+          <!-- Glowing Digital Circuit Nodes (Vertices) -->
+          <!-- Top Left -->
+          <circle cx="206" cy="206" r="14" fill="#00f2fe"/>
+          <circle cx="206" cy="206" r="6" fill="#ffffff"/>
+          
+          <!-- Top Right -->
+          <circle cx="306" cy="206" r="14" fill="#4facfe"/>
+          <circle cx="306" cy="206" r="6" fill="#ffffff"/>
+          
+          <!-- Center Logic Intersection -->
+          <circle cx="256" cy="256" r="12" fill="#2bf6c6"/>
+          
+          <!-- Bottom Left -->
+          <circle cx="206" cy="306" r="14" fill="#00f2fe"/>
+          <circle cx="206" cy="306" r="6" fill="#ffffff"/>
+          
+          <!-- Bottom Right -->
+          <circle cx="306" cy="306" r="14" fill="#4facfe"/>
+          <circle cx="306" cy="306" r="6" fill="#ffffff"/>
+        </svg>

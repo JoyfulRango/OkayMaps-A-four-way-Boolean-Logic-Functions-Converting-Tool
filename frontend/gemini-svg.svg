@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="188 188 136 136" width="256" height="256">
+  <!-- K-Map Node Connection Loops -->
+  <path d="M 206,206 L 256,206 L 256,306 L 206,306 Z" fill="none" stroke="#00f2fe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/>
+  <path d="M 256,206 L 306,206 M 256,256 L 306,206 M 256,256 L 306,306 M 256,306 L 306,306" fill="none" stroke="#4facfe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+  
+  <!-- Minterm Node Dots -->
+  <circle cx="206" cy="206" r="14" fill="#00f2fe"/>
+  <circle cx="206" cy="206" r="6" fill="#ffffff"/>
+  <circle cx="306" cy="206" r="14" fill="#4facfe"/>
+  <circle cx="306" cy="206" r="6" fill="#ffffff"/>
+  <circle cx="256" cy="256" r="12" fill="#2bf6c6"/>
+  <circle cx="206" cy="306" r="14" fill="#00f2fe"/>
+  <circle cx="206" cy="306" r="6" fill="#ffffff"/>
+  <circle cx="306" cy="306" r="14" fill="#4facfe"/>
+  <circle cx="306" cy="306" r="6" fill="#ffffff"/>
+</svg>

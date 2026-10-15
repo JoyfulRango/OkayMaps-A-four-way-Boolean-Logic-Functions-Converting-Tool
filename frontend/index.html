@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OKayMaps</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20viewBox=%22188%20188%20136%20136%22%20width=%22256%22%20height=%22256%22%3E%3Cpath%20d=%22M%20206,206%20L%20256,206%20L%20256,306%20L%20206,306%20Z%22%20fill=%22none%22%20stroke=%22%2300f2fe%22%20stroke-width=%2212%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22%20opacity=%220.9%22/%3E%3Cpath%20d=%22M%20256,206%20L%20306,206%20M%20256,256%20L%20306,206%20M%20256,256%20L%20306,306%20M%20256,306%20L%20306,306%22%20fill=%22none%22%20stroke=%22%234facfe%22%20stroke-width=%2212%22%20stroke-linecap=%22round%22%20stroke-linejoin=%22round%22/%3E%3Ccircle%20cx=%22206%22%20cy=%22206%22%20r=%2214%22%20fill=%22%2300f2fe%22/%3E%3Ccircle%20cx=%22206%22%20cy=%22206%22%20r=%226%22%20fill=%22%23ffffff%22/%3E%3Ccircle%20cx=%22306%22%20cy=%22206%22%20r=%2214%22%20fill=%22%234facfe%22/%3E%3Ccircle%20cx=%22306%22%20cy=%22206%22%20r=%226%22%20fill=%22%23ffffff%22/%3E%3Ccircle%20cx=%22256%22%20cy=%22256%22%20r=%2212%22%20fill=%22%232bf6c6%22/%3E%3Ccircle%20cx=%22206%22%20cy=%22306%22%20r=%2214%22%20fill=%22%2300f2fe%22/%3E%3Ccircle%20cx=%22206%22%20cy=%22306%22%20r=%226%22%20fill=%22%23ffffff%22/%3E%3Ccircle%20cx=%22306%22%20cy=%22306%22%20r=%2214%22%20fill=%22%234facfe%22/%3E%3Ccircle%20cx=%22306%22%20cy=%22306%22%20r=%226%22%20fill=%22%23ffffff%22/%3E%3C/svg%3E">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="hero">
+        <div class="badge"><i></i>Boolean Logic Toolkit</div>
+        <h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="188 188 136 136" class="logo-mark" aria-hidden="true" focusable="false"><path d="M 206,206 L 256,206 L 256,306 L 206,306 Z" fill="none" stroke="#00f2fe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" opacity="0.9"/><path d="M 256,206 L 306,206 M 256,256 L 306,206 M 256,256 L 306,306 M 256,306 L 306,306" fill="none" stroke="#4facfe" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/><circle cx="206" cy="206" r="14" fill="#00f2fe"/><circle cx="206" cy="206" r="6" fill="#ffffff"/><circle cx="306" cy="206" r="14" fill="#4facfe"/><circle cx="306" cy="206" r="6" fill="#ffffff"/><circle cx="256" cy="256" r="12" fill="#2bf6c6"/><circle cx="206" cy="306" r="14" fill="#00f2fe"/><circle cx="206" cy="306" r="6" fill="#ffffff"/><circle cx="306" cy="306" r="14" fill="#4facfe"/><circle cx="306" cy="306" r="6" fill="#ffffff"/></svg><span>OKayMaps</span></h1>
+        <div class="subtitle">Advanced Boolean Logic &amp; K-Map Solver. Enter a function any way you like and watch it get simplified step by step.</div>
+        <div class="chips"><span>SOP &amp; POS</span><span>Don't-cares</span><span>Step-by-step grouping</span><span>MUX implementation</span></div>
+    </header>
+
+    <div class="mode-selector" aria-label="Input mode">
+        <button id="mode-truth" class="active" onclick="setInputMode('truth')"><span class="ico">▦</span><span>Truth Table</span></button>
+        <button id="mode-equation" onclick="setInputMode('equation')"><span class="ico">ƒ</span><span>Equation</span></button>
+        <button id="mode-kmap" onclick="setInputMode('kmap')"><span class="ico">⊞</span><span>K-map</span></button>
+        <button id="mode-mux" onclick="setInputMode('mux')"><span class="ico">⋔</span><span>MUX</span></button>
+    </div>
+
+    <section id="history-panel" class="history-panel" aria-label="Recent solutions" hidden>
+        <div class="history-header">
+            <span class="history-title">Recent Solutions</span>
+            <button type="button" class="history-clear" onclick="clearSolutionHistory()">Clear</button>
+        </div>
+        <div id="history-list" class="history-list"></div>
+    </section>
+
+    <div id="truth-controls" class="truth-controls" hidden>
+        <div class="truth-variable-selector" aria-label="Truth table variable count">
+            <button id="truth-btn-2" onclick="selectTruthVariables(2)">2 Variables</button>
+            <button id="truth-btn-3" onclick="selectTruthVariables(3)">3 Variables</button>
+            <button id="truth-btn-4" onclick="selectTruthVariables(4)">4 Variables</button>
+        </div>
+        <div id="truth-table-container" class="truth-table-wrapper"></div>
+        <button class="generate-solution" onclick="generateTruthTableSolution()">Generate Solution</button>
+        <div id="truth-error" class="truth-error" role="alert"></div>
+    </div>
+
+    <div id="equation-controls" class="equation-controls" hidden>
+        <input id="equation-input" class="equation-input" type="text" placeholder="A ⊕ B + C'" aria-label="Boolean equation">
+        <div class="equation-helpers" role="group" aria-label="Quick insert operators">
+            <button type="button" class="equation-helper-btn" onclick="insertSymbolIntoEquation('⊕')">⊕ (XOR)</button>
+            <button type="button" class="equation-helper-btn" onclick="insertSymbolIntoEquation('⊙')">⊙ (XNOR)</button>
+            <button type="button" class="equation-helper-btn" onclick="insertSymbolIntoEquation('+')">+ (OR)</button>
+            <button type="button" class="equation-helper-btn" onclick="insertSymbolIntoEquation('\'')">' (NOT)</button>
+        </div>
+        <button class="generate-solution" onclick="generateEquationSolution()">Generate Solution</button>
+        <div id="equation-error" class="truth-error" role="alert"></div>
+    </div>
+
+    <div id="kmap-input-controls" class="truth-controls kmap-input-controls" hidden>
+        <div class="truth-variable-selector" aria-label="K-map input variable count">
+            <button id="kmap-btn-2" onclick="selectKMapInputVariables(2)">2 Variables</button>
+            <button id="kmap-btn-3" onclick="selectKMapInputVariables(3)">3 Variables</button>
+            <button id="kmap-btn-4" onclick="selectKMapInputVariables(4)">4 Variables</button>
+        </div>
+        <button class="generate-solution" onclick="generateKMapInputSolution()">Generate Solution</button>
+        <div id="kmap-input-error" class="truth-error" role="alert"></div>
+    </div>
+
+    <div id="mux-input-controls" class="truth-controls mux-input-controls" hidden>
+        <div class="truth-variable-selector" aria-label="MUX input variable count">
+            <button id="mux-btn-2" onclick="selectMuxVariables(2)">2 Variables</button>
+            <button id="mux-btn-3" onclick="selectMuxVariables(3)">3 Variables</button>
+            <button id="mux-btn-4" onclick="selectMuxVariables(4)">4 Variables</button>
+        </div>
+        <div class="truth-variable-selector mux-two-way" aria-label="MUX input format">
+            <button id="mux-format-folded" class="active" onclick="selectMuxInputFormat('folded')">Folded (2ⁿ⁻¹:1)</button>
+            <button id="mux-format-unfolded" onclick="selectMuxInputFormat('unfolded')">Unfolded (2ⁿ:1)</button>
+        </div>
+        <div id="mux-mapping-container" class="truth-table-wrapper"></div>
+        <button class="generate-solution" onclick="generateMuxSolution()">Generate Solution</button>
+        <div id="mux-error" class="truth-error" role="alert"></div>
+    </div>
+
+    <div class="legend"><span><b class="l1"></b>1 (Minterm)</span><span><b></b>0</span><span><b class="lx"></b>X (Don't Care)</span></div>
+
+    <div id="export-toolbar" class="export-toolbar" hidden>
+        <button type="button" id="export-pdf-btn" class="export-pdf-btn" onclick="exportToPDF()"><span aria-hidden="true">⤓</span><span class="export-pdf-label">Export as PDF</span></button>
+        <span id="export-status" class="export-status" role="status" aria-live="polite"></span>
+    </div>
+
+    <div id="kmap-pair" class="kmap-pair">
+        <div id="kmap-container" class="kmap-container">
+            <h2>1's Grouping (SOP)</h2>
+            <svg id="kmap-svg"></svg>
+            <div id="group-explanation" class="group-explanation" hidden></div>
+        </div>
+
+        <div id="pos-kmap-container" class="pos-kmap-container" hidden>
+            <h2>0's Grouping (POS)</h2>
+            <svg id="pos-kmap-svg"></svg>
+            <div id="pos-explanation" class="group-explanation"></div>
+        </div>
+    </div>
+
+    <div id="mux-container" class="mux-container" hidden></div>
+
+    <div id="circuit-container" class="mux-container circuit-container" hidden>
+        <h2>Logic Circuit Diagram</h2>
+        <div id="circuit-tabs" class="truth-variable-selector circuit-switcher" role="tablist" aria-label="Circuit view">
+            <button type="button" id="circuit-tab-sop" data-view="sop" role="tab" onclick="setCircuitView('sop')">SOP Circuit (AND-OR)</button>
+            <button type="button" id="circuit-tab-pos" data-view="pos" role="tab" onclick="setCircuitView('pos')">POS Circuit (OR-AND)</button>
+            <button type="button" id="circuit-tab-xor" data-view="xor" role="tab" onclick="setCircuitView('xor')" hidden>Simplified Circuit (XOR/XNOR)</button>
+        </div>
+        <div id="circuit-diagram" class="circuit-scroll"></div>
+        <p id="circuit-expression" class="circuit-expr"></p>
+    </div>
+
+    <script src="script.js" defer></script>
+    <div class="footer">OKayMaps · Boolean Minimization Made Visual</div>
+</body>
+</html>
