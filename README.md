@@ -2,6 +2,10 @@
 
 OKayMaps is a Boolean algebra and Karnaugh-map solving application.
 
+## Live application
+
+[Open OKayMaps](https://okaymaps.onrender.com/)
+
 ## Features
 
 - Boolean expression simplification
