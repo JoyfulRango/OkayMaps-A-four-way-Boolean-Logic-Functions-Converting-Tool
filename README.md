@@ -31,3 +31,5 @@ uvicorn backend.main:app --reload
 Then open http://localhost:8000.
 
 You can also run `OKayMaps.bat` after installing the dependencies.
+
+Works good
