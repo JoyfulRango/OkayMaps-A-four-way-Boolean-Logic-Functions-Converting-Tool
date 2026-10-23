@@ -1413,6 +1413,195 @@
             });
         }
 
+        /* ---------- Quine-McCluskey (tabular method) steps ---------- */
+        // Builds a <details> dropdown from the backend's qm_steps_sop / qm_steps_pos payload.
+        // type: "sop" (grouping the 1s -> minterms) or "pos" (grouping the 0s -> maxterms).
+        // Returns null when there is nothing to show (e.g. F = 0, F = 1 or an all-X map).
+        function renderQMSteps(qmData, type = "sop") {
+            if (!qmData || !Array.isArray(qmData.tables) || qmData.tables.length === 0) return null;
+
+            const isSop = type !== "pos";
+            const prefix = isSop ? "m" : "M";
+            const termWord = isSop ? "minterms" : "maxterms";
+            const dontCares = new Set(qmData.dontcares || []);
+
+            const make = (tag, className, text) => {
+                const node = document.createElement(tag);
+                if (className) node.className = className;
+                if (text !== undefined) node.textContent = text;
+                return node;
+            };
+            const cellLabel = cells => `${prefix}(${cells.map(c => c + (dontCares.has(c) ? "*" : "")).join(", ")})`;
+            const addCode = (parent, text) => {
+                const code = document.createElement("code");
+                code.textContent = text;
+                parent.appendChild(code);
+                return code;
+            };
+            const buildTable = (headers, className) => {
+                const wrapper = make("div", "truth-table-wrapper");
+                const table = make("table", "truth-table" + (className ? " " + className : ""));
+                const thead = document.createElement("thead");
+                const headRow = document.createElement("tr");
+                headers.forEach(label => headRow.appendChild(make("th", "", label)));
+                thead.appendChild(headRow);
+                table.appendChild(thead);
+                const tbody = document.createElement("tbody");
+                table.appendChild(tbody);
+                wrapper.appendChild(table);
+                return { wrapper, tbody };
+            };
+
+            const details = make("details", "qm-steps");
+            details.dataset.qmType = isSop ? "sop" : "pos";
+            details.appendChild(make("summary", "", "Show Quine-McCluskey Tabular Steps"));
+
+            // ---- intro ----
+            const intro = make("p", "qm-note");
+            intro.appendChild(document.createTextNode(
+                isSop
+                    ? "The tabular method groups the 1s (minterms) by how many 1-bits they contain and repeatedly merges terms that differ in exactly one bit. A dash (-) marks an eliminated variable. "
+                    : "The tabular method groups the 0s (maxterms) by how many 1-bits they contain and repeatedly merges terms that differ in exactly one bit. A dash (-) marks an eliminated variable. "
+            ));
+            intro.appendChild(document.createTextNode(`Cells to cover (${termWord}): `));
+            addCode(intro, `${prefix}(${qmData.targets.join(", ")})`);
+            if (dontCares.size > 0) {
+                intro.appendChild(document.createTextNode(" · Don't-cares (usable for merging only): "));
+                addCode(intro, `d(${qmData.dontcares.join(", ")})`);
+            }
+            intro.appendChild(document.createTextNode("."));
+            details.appendChild(intro);
+
+            // ---- Step 1: merging tables ----
+            qmData.tables.forEach((table, levelIndex) => {
+                const section = make("section", "group-explanation-group");
+                const title = levelIndex === 0
+                    ? `Step 1.${levelIndex + 1}: Column 1 — individual ${termWord}`
+                    : `Step 1.${levelIndex + 1}: Column ${levelIndex + 1} — groups of ${table.size}`;
+                section.appendChild(make("h3", "", title));
+
+                const hasMerge = levelIndex > 0;
+                const headers = ["Ones", isSop ? "Minterms" : "Maxterms", "Binary"];
+                if (hasMerge) headers.push("Merged from");
+                headers.push("Status");
+                const { wrapper, tbody } = buildTable(headers, "qm-merge-table");
+
+                table.groups.forEach(group => {
+                    group.rows.forEach((row, rowIndex) => {
+                        const tr = document.createElement("tr");
+                        if (rowIndex === 0) tr.className = "qm-group-start";
+
+                        if (rowIndex === 0) {
+                            const ones = make("td", "qm-ones", String(group.ones));
+                            ones.rowSpan = group.rows.length;
+                            tr.appendChild(ones);
+                        }
+                        tr.appendChild(make("td", "", cellLabel(row.minterms)));
+                        tr.appendChild(make("td", "qm-binary", row.binary));
+                        if (hasMerge) {
+                            const text = (row.merged_from || []).map(pair => `${pair[0]} + ${pair[1]}`).join("; ");
+                            tr.appendChild(make("td", "qm-merged-from", text || "—"));
+                        }
+                        tr.appendChild(row.combined
+                            ? make("td", "qm-combined", "✓ Combined")
+                            : make("td", "qm-prime", "Prime implicant"));
+                        tbody.appendChild(tr);
+                    });
+                });
+
+                section.appendChild(wrapper);
+                if (levelIndex === 0 && dontCares.size > 0) {
+                    section.appendChild(make("p", "qm-note", "* = don't-care cell."));
+                }
+                if (levelIndex === qmData.tables.length - 1) {
+                    section.appendChild(make("p", "qm-note",
+                        "No further merging is possible after this column, so every term marked “Prime implicant” in any column is a prime implicant."));
+                }
+                details.appendChild(section);
+            });
+
+            // ---- Step 2: prime implicant coverage chart ----
+            const coverage = qmData.coverage || { columns: [], rows: [], essential_terms: [] };
+            const chartSection = make("section", "group-explanation-group");
+            chartSection.appendChild(make("h3", "", "Step 2: Prime Implicant Coverage Chart"));
+
+            const essentialTerms = new Set(coverage.essential_terms || []);
+            const chartHeaders = ["Prime implicant"]
+                .concat(coverage.columns.map(cell => `${prefix}${cell}`))
+                .concat(["Result"]);
+            const { wrapper: chartWrapper, tbody: chartBody } = buildTable(chartHeaders, "qm-chart");
+
+            coverage.rows.forEach(row => {
+                const tr = document.createElement("tr");
+                if (row.selected) tr.className = "qm-row-selected";
+
+                const label = make("td", "qm-pi-label");
+                label.appendChild(document.createTextNode(row.term + " "));
+                const bin = make("span", "qm-pi-binary", `(${row.binary})`);
+                label.appendChild(bin);
+                tr.appendChild(label);
+
+                coverage.columns.forEach((cell, columnIndex) => {
+                    const covered = row.covers[columnIndex];
+                    const td = make("td", covered
+                        ? "qm-x" + (essentialTerms.has(cell) ? " qm-x-essential" : "")
+                        : "", covered ? "X" : "");
+                    tr.appendChild(td);
+                });
+
+                const result = row.essential ? "Essential" : (row.selected ? "Selected" : "—");
+                tr.appendChild(make("td", row.essential || row.selected ? "qm-combined" : "", result));
+                chartBody.appendChild(tr);
+            });
+            chartSection.appendChild(chartWrapper);
+
+            const chosen = coverage.rows.filter(row => row.selected);
+            const essentialRows = coverage.rows.filter(row => row.essential);
+            const legend = make("p", "qm-note",
+                "X = the prime implicant covers that term. A highlighted X is the only X in its column, so that prime implicant is essential and must be used.");
+            chartSection.appendChild(legend);
+            if (coverage.rows.length < (qmData.prime_implicants || []).length) {
+                chartSection.appendChild(make("p", "qm-note",
+                    "Prime implicants made up only of don't-cares are left out because they cover nothing that has to be covered."));
+            }
+
+            if (essentialRows.length > 0) {
+                const essentialLine = make("p");
+                essentialLine.appendChild(document.createTextNode("Essential prime implicants: "));
+                addCode(essentialLine, essentialRows.map(row => row.term).join(", "));
+                chartSection.appendChild(essentialLine);
+            }
+            if (chosen.length > 0) {
+                const resultLine = make("p", "final-equation");
+                resultLine.appendChild(document.createTextNode(
+                    isSop ? "Minimal cover (SOP): F = " : "Minimal cover (POS): F = "));
+                addCode(resultLine, chosen.map(row => row.term).join(isSop ? " + " : ""));
+                chartSection.appendChild(resultLine);
+            }
+            details.appendChild(chartSection);
+
+            return details;
+        }
+
+        // Appends the QM dropdown at the very bottom of a SOP / POS explanation container.
+        function appendQMStepsSection(container, type, generation) {
+            if (!container || !container.isConnected || activeMapGeneration !== generation) return;
+            const previous = container.querySelector(":scope > details.qm-steps");
+            if (previous) previous.remove();
+            const data = currentLogicData
+                ? currentLogicData[type === "pos" ? "qm_steps_pos" : "qm_steps_sop"]
+                : null;
+            const dropdown = renderQMSteps(data, type);
+            if (dropdown) container.appendChild(dropdown);
+        }
+
+        // textContent of an explanation box without the (long) QM tables, for the AI helper / PDF export.
+        function explanationTextWithoutQM(element) {
+            const clone = element.cloneNode(true);
+            clone.querySelectorAll("details.qm-steps").forEach(node => node.remove());
+            return clone.textContent.trim();
+        }
+
         function appendPOSSection(explanation, numVars, generation) {
     if (currentNumVars !== numVars || activeMapGeneration !== generation) return;
     const pos = computePOS(numVars);
@@ -1507,6 +1696,9 @@
     equationCode.textContent = pos.expression;
     equation.appendChild(equationCode);
     posExplanation.appendChild(equation);
+
+    // Quine-McCluskey dropdown for the 0s, at the very bottom of the POS explanation.
+    appendQMStepsSection(posExplanation, "pos", generation);
 }
 
 
@@ -1687,12 +1879,15 @@
                         recognized.appendChild(recognizedCode);
                         explanation.appendChild(recognized);
                     }
+                    // Quine-McCluskey dropdown for the 1s, below everything else in the SOP explanation.
+                    appendQMStepsSection(explanation, "sop", explanationGeneration);
                     appendPOSSection(explanation, numVars, explanationGeneration);
                 })
                 .catch(error => {
                     // Surfaced in devtools instead of failing silently - check here if the
                     // algebraic-simplification line doesn't show up.
                     console.error("Algebraic simplification pass failed:", error);
+                    appendQMStepsSection(explanation, "sop", explanationGeneration);
                     appendPOSSection(explanation, numVars, explanationGeneration);
                 });
 
@@ -1906,7 +2101,7 @@
             return best || [];
         }
 
-        /* Builds the SOP / POS / XOR expression strings for the current solution payload. */
+        /* Builds the SOP / POS / NAND / NOR / XOR expression strings for the current solution payload. */
         function circuitBuildForms(data) {
             const n = data.num_vars;
             const vars = (data.variables && data.variables.length === n) ? data.variables : ["A", "B", "C", "D"].slice(0, n);
@@ -1956,7 +2151,7 @@
                     }
                 }
             }
-            return { sop, pos, xor, vars };
+            return { sop, pos, nand: sop, nor: pos, xor, vars };   // nand/nor reuse the SOP/POS strings; the parser applies the double negation
         }
 
         /* ---------- 2. Expression parser -> gate tree ---------- */
@@ -1977,6 +2172,43 @@
         }
         const circuitFlat = (type, items) => items.length === 1 ? items[0] : { kind: "gate", type, children: items };
 
+        /* POS string -> array of sum groups, each an array of literals. */
+        function circuitParsePosGroups(text) {
+            const groups = [];
+            if (!text.includes("(")) {
+                if (text.includes("+")) groups.push(text.split("+").map(circuitSingleLiteral));
+                else circuitLiterals(text).forEach(l => groups.push([l]));
+            } else {
+                let i = 0;
+                while (i < text.length) {
+                    if (text[i] === "(") {
+                        const j = text.indexOf(")", i);
+                        if (j < 0) throw new Error("Unbalanced parentheses");
+                        groups.push(text.slice(i + 1, j).split("+").map(circuitSingleLiteral));
+                        i = j + 1;
+                    } else {
+                        const m = /^([A-Z])('?)/.exec(text.slice(i));
+                        if (!m) throw new Error("Cannot parse expression");
+                        groups.push([{ kind: "lit", name: m[1], neg: m[2] === "'" }]);
+                        i += m[0].length;
+                    }
+                }
+            }
+            return groups;
+        }
+        const circuitInvertLit = l => ({ kind: "lit", name: l.name, neg: !l.neg });
+
+        /* Universal-gate tree. `groups` = Level-1 terms (product terms for NAND, sum terms for NOR).
+           Level-1 terms with >= 2 literals become `gateType` gates; a single literal is inverted and fed
+           straight to the output gate, so that (X')' = X. The root is also a `gateType` gate. */
+        function circuitUniversalTree(groups, gateType) {
+            if (groups.length === 1 && groups[0].length === 1) return groups[0][0];   // F is a single literal: no gates needed
+            const level1 = groups.map(g => g.length >= 2
+                ? { kind: "gate", type: gateType, children: g }
+                : circuitInvertLit(g[0]));
+            return { kind: "gate", type: gateType, children: level1 };   // one Level-1 term -> the output gate acts as an inverter
+        }
+
         function parseCircuitExpression(expression, mode) {
             const text = circuitNormalize(expression);
             if (text === "0" || text === "1") return { kind: "const", value: text };
@@ -1984,31 +2216,29 @@
             if (mode === "xor") {
                 root = circuitParseSimplified(text);
             } else if (mode === "pos") {
-                const groups = [];
-                if (!text.includes("(")) {
-                    if (text.includes("+")) groups.push(text.split("+").map(circuitSingleLiteral));
-                    else circuitLiterals(text).forEach(l => groups.push([l]));
-                } else {
-                    let i = 0;
-                    while (i < text.length) {
-                        if (text[i] === "(") {
-                            const j = text.indexOf(")", i);
-                            if (j < 0) throw new Error("Unbalanced parentheses");
-                            groups.push(text.slice(i + 1, j).split("+").map(circuitSingleLiteral));
-                            i = j + 1;
-                        } else {
-                            const m = /^([A-Z])('?)/.exec(text.slice(i));
-                            if (!m) throw new Error("Cannot parse expression");
-                            groups.push([{ kind: "lit", name: m[1], neg: m[2] === "'" }]);
-                            i += m[0].length;
-                        }
-                    }
-                }
-                root = circuitFlat("and", groups.map(g => circuitFlat("or", g)));
+                root = circuitFlat("and", circuitParsePosGroups(text).map(g => circuitFlat("or", g)));
+            } else if (mode === "nand") {
+                root = circuitUniversalTree(text.split("+").map(circuitLiterals), "nand");
+            } else if (mode === "nor") {
+                root = circuitUniversalTree(circuitParsePosGroups(text), "nor");
             } else {
                 root = circuitFlat("or", text.split("+").map(t => circuitFlat("and", circuitLiterals(t))));
             }
             return { kind: root.kind === "lit" ? "literal" : "tree", root };
+        }
+
+        /* Caption text for the double-negated NAND-NAND / NOR-NOR forms, e.g. ((AB)' · C')' */
+        function circuitCaptionText(expression, mode) {
+            if (mode !== "nand" && mode !== "nor") return expression;
+            try {
+                const parsed = parseCircuitExpression(expression, mode);
+                if (parsed.kind !== "tree") return expression;
+                const litText = l => l.name + (l.neg ? "'" : "");
+                const sep = mode === "nand" ? "" : "+", rootSep = mode === "nand" ? " · " : " + ";
+                const kids = parsed.root.children.map(c =>
+                    c.kind === "lit" ? litText(c) : "(" + c.children.map(litText).join(sep) + ")'");
+                return "(" + kids.join(rootSep) + ")'";
+            } catch (err) { return expression; }
         }
         /* ---------- XOR / XNOR expression parser ----------
            Grammar (same precedence the backend formatter uses):
@@ -2277,7 +2507,7 @@
             return assemble(root.outX + 100, bottom + 35);
         }
 
-        /* Public engine: expression string + mode ("sop" | "pos" | "xor"). Returns the SVG markup;
+        /* Public engine: expression string + mode ("sop" | "pos" | "nand" | "nor" | "xor"). Returns the SVG markup;
            if `target` (an element) is given the SVG is also inserted into it. */
         function renderCircuitDiagram(expression, mode = "sop", target = null) {
             let markup;
@@ -2345,7 +2575,7 @@
             const hasXor = !!circuitForms.xor;
             document.getElementById("circuit-tab-xor").hidden = !hasXor;
             if (circuitView === "xor" && !hasXor) circuitView = "sop";
-            tabs.style.gridTemplateColumns = `repeat(${hasXor ? 3 : 2}, minmax(0, 1fr))`;
+            tabs.style.gridTemplateColumns = "";   // layout handled by CSS (auto-fit) so 4 or 5 tabs fit any screen
             tabs.querySelectorAll("button[data-view]").forEach(button => {
                 const active = button.dataset.view === circuitView;
                 button.classList.toggle("active", active);
@@ -2355,7 +2585,7 @@
             renderCircuitDiagram(expression, circuitView, diagram);
             caption.textContent = "F = ";
             const code = document.createElement("code");
-            code.textContent = expression;
+            code.textContent = circuitCaptionText(expression, circuitView);
             caption.appendChild(code);
         }
 
@@ -2422,8 +2652,10 @@ function buildPrintExtras(data) {
 
     if (circuitForms) {
         [
-            ["sop", "SOP Logic Circuit (AND-OR)"],
-            ["pos", "POS Logic Circuit (OR-AND)"],
+            ["sop", "SOP Logic Circuit"],
+            ["pos", "POS Logic Circuit"],
+            ["nand", "Universal Gate: NAND-Only Logic Circuit"],
+            ["nor", "Universal Gate: NOR-Only Logic Circuit"],
             ["xor", "Simplified Logic Circuit (XOR/XNOR)"]
         ].forEach(([mode, title]) => {
             const expression = circuitForms[mode];
@@ -2441,7 +2673,7 @@ function buildPrintExtras(data) {
             caption.className = "circuit-expr";
             caption.appendChild(document.createTextNode("F = "));
             const code = document.createElement("code");
-            code.textContent = expression;
+            code.textContent = circuitCaptionText(expression, mode);
             caption.appendChild(code);
             section.appendChild(caption);
             host.appendChild(section);
@@ -2483,6 +2715,288 @@ async function exportToPDF() {
         if (button) button.disabled = false;
     }
 }
+
+        /* ===================== AI HELPER CHATBOT ===================== */
+
+        /* "Screen reader": snapshots everything the user currently sees into a compact JSON object. */
+        function getScreenContext() {
+            const read = id => { const el = document.getElementById(id); return el ? el.textContent.trim() : ""; };
+            const cap = (text, max = 1500) => text.length > max ? text.slice(0, max) + "…" : text;
+            const ctx = { active_mode: currentInputMode, inputs: {}, solution: null, errors: [] };
+
+            // ---- current inputs for the active mode ----
+            try {
+                if (currentInputMode === "truth") {
+                    const rows = {};
+                    document.querySelectorAll("#truth-table-container select[data-bits]")
+                        .forEach(select => { rows[select.getAttribute("data-bits")] = select.value; });
+                    ctx.inputs = { num_vars: truthTableNumVars, variables: truthVariables(truthTableNumVars), truth_table_outputs: rows };
+                } else if (currentInputMode === "equation") {
+                    const input = document.getElementById("equation-input");
+                    ctx.inputs = { equation: input ? input.value.trim() : "" };
+                } else if (currentInputMode === "kmap") {
+                    const cells = {};
+                    for (let m = 0; m < 2 ** kmapInputNumVars; m++) cells["m" + m] = kmapInputValues[m] || "0";
+                    ctx.inputs = { num_vars: kmapInputNumVars, variables: truthVariables(kmapInputNumVars), kmap_cells: cells };
+                } else if (currentInputMode === "mux") {
+                    const pins = [];
+                    document.querySelectorAll("#mux-mapping-container select[data-mux-index]")
+                        .forEach(select => pins.push({ input: "I" + select.getAttribute("data-mux-index"), connected_to: select.value }));
+                    ctx.inputs = {
+                        num_vars: muxInputNumVars, variables: truthVariables(muxInputNumVars),
+                        input_format: muxInputMode, pin_mapping: pins
+                    };
+                }
+            } catch (err) { ctx.inputs = { note: "Could not read inputs: " + err.message }; }
+
+            // ---- current solution (currentLogicData + circuitForms) ----
+            const data = currentLogicData;
+            if (data && [2, 3, 4].includes(data.num_vars)) {
+                const sol = {
+                    num_vars: data.num_vars,
+                    variables: data.variables || truthVariables(data.num_vars),
+                    minterms: data.minterms || [],
+                    dont_cares: data.dontcares || []
+                };
+                if (circuitForms) {
+                    sol.expressions = { sop: circuitForms.sop, pos: circuitForms.pos };
+                    if (circuitForms.xor) sol.expressions.xor_xnor = circuitForms.xor;
+                    sol.selected_circuit_view = circuitView;
+                }
+                const folded = data.mux && (data.mux.folded || data.mux);
+                if (folded && Array.isArray(folded.inputs)) {
+                    sol.mux = { selected_output_view: muxOutputView, folded_inputs: folded.inputs };
+                    if (folded.select_lines || folded.selects) sol.mux.select_lines = folded.select_lines || folded.selects;
+                }
+                const sopText = document.getElementById("group-explanation");
+                const posText = document.getElementById("pos-explanation");
+                const kmap = {};
+                if (sopText && !sopText.hidden && sopText.textContent.trim()) kmap.sop_grouping_explanation = cap(explanationTextWithoutQM(sopText));
+                const posBox = document.getElementById("pos-kmap-container");
+                if (posText && posBox && !posBox.hidden && posText.textContent.trim()) kmap.pos_grouping_explanation = cap(explanationTextWithoutQM(posText));
+                if (Object.keys(kmap).length) sol.kmap = kmap;
+                ctx.solution = sol;
+            }
+
+            // ---- visible UI errors ----
+            [["truth", "truth-error"], ["equation", "equation-error"], ["kmap", "kmap-input-error"], ["mux", "mux-error"]]
+                .forEach(([source, id]) => {
+                    const message = read(id);
+                    const box = document.getElementById(id);
+                    if (message && box && box.offsetParent !== null) ctx.errors.push({ source, message });
+                });
+            const circuitErr = document.querySelector("#circuit-diagram .circuit-error");
+            if (circuitErr) ctx.errors.push({ source: "circuit", message: circuitErr.textContent.trim() });
+            return ctx;
+        }
+
+        /* ---------- safe, minimal markdown -> HTML (everything is HTML-escaped first) ---------- */
+        function chatEscapeHtml(s) {
+            return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+        }
+        function chatInlineMarkdown(escaped) {
+            let s = escaped;
+            // Convert common LaTeX math commands to readable Unicode
+            s = s.replace(/\\oplus\b/g, "⊕")
+                 .replace(/\\odot\b/g, "⊙")
+                 .replace(/\\rightarrow\b|\\to\b/g, "→")
+                 .replace(/\\cdot\b/g, "·")
+                 .replace(/\\times\b/g, "×")
+                 .replace(/\\land\b/g, "·")
+                 .replace(/\\lor\b/g, "+")
+                 .replace(/\\neg\b/g, "~")
+                 .replace(/\\overline\{([^}]+)\}/g, "$1'")
+                 .replace(/\\bar\{([^}]+)\}/g, "$1'")
+                 .replace(/\\mathbf\{([^}]+)\}/g, "$1")
+                 .replace(/\\mathit\{([^}]+)\}/g, "$1")
+                 .replace(/\\mathrm\{([^}]+)\}/g, "$1")
+                 .replace(/\\text\{([^}]+)\}/g, "$1");
+
+            // Convert $$...$$ and $...$ math blocks into inline code chips
+            s = s.replace(/\$\$([^$\n]+)\$\$/g, "<code>$1</code>")
+                 .replace(/\$([^$\n]+)\$/g, "<code>$1</code>");
+
+            // Standard inline markdown
+            s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>")
+                 .replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
+
+            return s;
+        }
+        function chatRenderMarkdown(text) {
+            const blocks = [];
+            let src = String(text || "").replace(/\r\n/g, "\n");
+            // Extract display math blocks ($$...$$) if multiline
+            src = src.replace(/\$\$([\s\S]*?)\$\$/g, (_, math) => {
+                blocks.push(math.trim());
+                return "\n\u0000" + (blocks.length - 1) + "\u0000\n";
+            });
+            src = src.replace(/```[a-zA-Z0-9_-]*\n?([\s\S]*?)```/g, (_, code) => {
+                blocks.push(code.replace(/\n$/, ""));
+                return "\n\u0000" + (blocks.length - 1) + "\u0000\n";
+            });
+            const out = [];
+            let list = null;
+            const closeList = () => { if (list) { out.push("</" + list + ">"); list = null; } };
+            const openList = tag => { if (list !== tag) { closeList(); out.push("<" + tag + ">"); list = tag; } };
+            src.split("\n").forEach(raw => {
+                const line = raw.trimEnd();
+                let m;
+                if ((m = /^\u0000(\d+)\u0000$/.exec(line.trim()))) {
+                    closeList();
+                    out.push("<pre><code>" + chatEscapeHtml(blocks[Number(m[1])]) + "</code></pre>");
+                } else if ((m = /^\s*[-*•]\s+(.*)$/.exec(line))) {
+                    openList("ul"); out.push("<li>" + chatInlineMarkdown(chatEscapeHtml(m[1])) + "</li>");
+                } else if ((m = /^\s*\d+[.)]\s+(.*)$/.exec(line))) {
+                    openList("ol"); out.push("<li>" + chatInlineMarkdown(chatEscapeHtml(m[1])) + "</li>");
+                } else {
+                    closeList();
+                    if (!line.trim()) return;
+                    if ((m = /^#{1,6}\s+(.*)$/.exec(line))) out.push('<p class="chat-h">' + chatInlineMarkdown(chatEscapeHtml(m[1])) + "</p>");
+                    else if (/^[-*_]{3,}$/.test(line.trim())) out.push('<hr class="chat-hr">');
+                    else out.push("<p>" + chatInlineMarkdown(chatEscapeHtml(line)) + "</p>");
+                }
+            });
+            closeList();
+            return out.join("");
+        }
+
+        /* ---------- widget UI ---------- */
+        var chatBusy = false;
+        var chatContextTimer = null;
+        const CHAT_MODE_LABELS = { truth: "Truth Table", equation: "Equation", kmap: "K-map", mux: "MUX" };
+
+        function chatEl(id) { return document.getElementById(id); }
+
+        function updateChatContextChip() {
+            const label = chatEl("chat-context-text");
+            if (!label) return;
+            const data = currentLogicData;
+            const vars = data && data.num_vars ? data.num_vars
+                : ({ truth: truthTableNumVars, kmap: kmapInputNumVars, mux: muxInputNumVars }[currentInputMode] || null);
+            let text = "Viewing: " + (vars ? vars + "-Var " : "") + (CHAT_MODE_LABELS[currentInputMode] || currentInputMode);
+            if (data) text += " · solved";
+            else if (currentInputMode === "equation") {
+                const input = chatEl("equation-input");
+                if (input && input.value.trim()) text += ": " + input.value.trim().slice(0, 24);
+            }
+            if (getScreenContext().errors.length) text += " · error shown";
+            label.textContent = text;
+        }
+
+        function setChatStatus(state, text) {
+            const dot = chatEl("chat-status-dot"), label = chatEl("chat-status-text");
+            if (dot) dot.className = "chat-status-dot" + (state ? " " + state : "");
+            if (label) label.textContent = text;
+        }
+
+        function appendChatMessage(kind, text) {
+            const stream = chatEl("chat-messages");
+            if (!stream) return null;
+            const bubble = document.createElement("div");
+            bubble.className = "chat-msg " + kind;
+            if (kind === "bot") bubble.innerHTML = chatRenderMarkdown(text);
+            else bubble.textContent = text;           // user + error text is never parsed as HTML
+            stream.appendChild(bubble);
+            stream.scrollTop = stream.scrollHeight;
+            return bubble;
+        }
+
+        function showChatTyping() {
+            const stream = chatEl("chat-messages");
+            const bubble = document.createElement("div");
+            bubble.className = "chat-msg bot chat-typing";
+            bubble.id = "chat-typing";
+            bubble.setAttribute("aria-label", "AI helper is typing");
+            bubble.innerHTML = "<i></i><i></i><i></i>";
+            stream.appendChild(bubble);
+            stream.scrollTop = stream.scrollHeight;
+        }
+        function hideChatTyping() {
+            const bubble = chatEl("chat-typing");
+            if (bubble) bubble.remove();
+        }
+
+        function setChatBusy(busy) {
+            chatBusy = busy;
+            const send = chatEl("chat-send");
+            if (send) send.disabled = busy;
+            document.querySelectorAll("#chat-quick-actions button").forEach(b => { b.disabled = busy; });
+            setChatStatus(busy ? "busy" : "", busy ? "Thinking…" : "Online");
+        }
+
+        async function sendChatMessage(question) {
+            question = String(question || "").trim();
+            if (!question || chatBusy) return;
+            appendChatMessage("user", question);
+            const input = chatEl("chat-input");
+            if (input) input.value = "";
+            setChatBusy(true);
+            showChatTyping();
+
+            const controller = new AbortController();
+            const timeout = setTimeout(() => controller.abort(), 120000);
+            try {
+                const response = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ question, context: getScreenContext() }),
+                    signal: controller.signal
+                });
+                const body = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(body.detail || "The AI helper is unavailable right now.");
+                hideChatTyping();
+                appendChatMessage("bot", body.response || "I didn't get an answer. Please try again.");
+                setChatBusy(false);
+            } catch (err) {
+                hideChatTyping();
+                appendChatMessage("error", err.name === "AbortError" ? "The request timed out. Please try again." : (err.message || "Something went wrong."));
+                setChatBusy(false);
+                setChatStatus("error", "Connection problem");
+            } finally {
+                clearTimeout(timeout);
+                updateChatContextChip();
+            }
+        }
+
+        function setChatOpen(open) {
+            const card = chatEl("chat-widget-card"), toggle = chatEl("chat-widget-toggle");
+            if (!card || !toggle) return;
+            card.hidden = !open;
+            toggle.setAttribute("aria-expanded", String(open));
+            toggle.setAttribute("aria-label", open ? "Close AI helper" : "Open AI helper");
+            toggle.querySelector(".chat-toggle-icon").textContent = open ? "✕" : "💬";
+            clearInterval(chatContextTimer);
+            if (open) {
+                updateChatContextChip();
+                chatContextTimer = setInterval(updateChatContextChip, 1500);   // keep the "what the AI sees" chip fresh
+                const input = chatEl("chat-input");
+                if (input && window.matchMedia("(min-width: 521px)").matches) input.focus();
+                const stream = chatEl("chat-messages");
+                if (stream) stream.scrollTop = stream.scrollHeight;
+            }
+        }
+
+        function initChatWidget() {
+            const toggle = chatEl("chat-widget-toggle");
+            if (!toggle || toggle.dataset.ready) return;
+            toggle.dataset.ready = "1";
+            appendChatMessage("bot", "Hi! I'm your **OKayMaps AI Helper**. I can see your current inputs and solution, so ask me anything about them — try a suggestion below.");
+            toggle.addEventListener("click", () => setChatOpen(chatEl("chat-widget-card").hidden));
+            chatEl("chat-minimize").addEventListener("click", () => { setChatOpen(false); toggle.focus(); });
+            chatEl("chat-form").addEventListener("submit", event => {
+                event.preventDefault();
+                sendChatMessage(chatEl("chat-input").value);
+            });
+            document.querySelectorAll("#chat-quick-actions button").forEach(button =>
+                button.addEventListener("click", () => sendChatMessage(button.dataset.question)));
+            chatEl("chat-widget").addEventListener("keydown", event => {
+                if (event.key === "Escape" && !chatEl("chat-widget-card").hidden) { setChatOpen(false); toggle.focus(); }
+            });
+        }
+        window.getScreenContext = getScreenContext;
+        initChatWidget();   // script is loaded with `defer`, so the DOM is ready; no-op if the markup is missing
+
 
 // Attach public helpers and initialize the default Truth Table input state.
         window.drawKMap = drawKMap;

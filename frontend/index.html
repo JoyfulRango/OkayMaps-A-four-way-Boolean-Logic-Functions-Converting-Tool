@@ -106,8 +106,10 @@
     <div id="circuit-container" class="mux-container circuit-container" hidden>
         <h2>Logic Circuit Diagram</h2>
         <div id="circuit-tabs" class="truth-variable-selector circuit-switcher" role="tablist" aria-label="Circuit view">
-            <button type="button" id="circuit-tab-sop" data-view="sop" role="tab" onclick="setCircuitView('sop')">SOP Circuit (AND-OR)</button>
-            <button type="button" id="circuit-tab-pos" data-view="pos" role="tab" onclick="setCircuitView('pos')">POS Circuit (OR-AND)</button>
+            <button type="button" id="circuit-tab-sop" data-view="sop" role="tab" onclick="setCircuitView('sop')">SOP Circuit</button>
+            <button type="button" id="circuit-tab-pos" data-view="pos" role="tab" onclick="setCircuitView('pos')">POS Circuit</button>
+            <button type="button" id="circuit-tab-nand" data-view="nand" role="tab" onclick="setCircuitView('nand')">Universal Gate: NAND Circuit</button>
+            <button type="button" id="circuit-tab-nor" data-view="nor" role="tab" onclick="setCircuitView('nor')">Universal Gate: NOR Circuit</button>
             <button type="button" id="circuit-tab-xor" data-view="xor" role="tab" onclick="setCircuitView('xor')" hidden>Simplified Circuit (XOR/XNOR)</button>
         </div>
         <div id="circuit-diagram" class="circuit-scroll"></div>
@@ -116,5 +118,36 @@
 
     <script src="script.js" defer></script>
     <div class="footer">OKayMaps · Boolean Minimization Made Visual</div>
+
+    <!-- OKayMaps AI Helper (screen-aware chatbot) -->
+    <div id="chat-widget" class="chat-widget">
+        <section id="chat-widget-card" class="chat-card" role="dialog" aria-label="OKayMaps AI Helper" hidden>
+            <header class="chat-header">
+                <div class="chat-avatar" aria-hidden="true">✦</div>
+                <div class="chat-header-text">
+                    <div class="chat-title">OKayMaps AI Helper</div>
+                    <div class="chat-status"><span class="chat-status-dot" id="chat-status-dot"></span><span id="chat-status-text">Online</span></div>
+                </div>
+                <button type="button" id="chat-minimize" class="chat-icon-btn" aria-label="Minimize chat">&minus;</button>
+            </header>
+            <div class="chat-context">
+                <span class="chat-context-chip" id="chat-context-chip" title="What the AI helper can currently see on your screen"><span aria-hidden="true">👁</span><span id="chat-context-text">Viewing: Truth Table</span></span>
+            </div>
+            <div id="chat-messages" class="chat-messages" role="log" aria-live="polite"></div>
+            <div id="chat-quick-actions" class="chat-quick" aria-label="Suggested questions">
+                <button type="button" data-question="Explain this simplification step by step.">Explain this simplification</button>
+                <button type="button" data-question="How does this K-map grouping work?">How does this K-map grouping work?</button>
+                <button type="button" data-question="Why is this the minimal form? Could it be simplified further?">Is this minimal?</button>
+                <button type="button" data-question="Explain the MUX and logic circuit implementation for this function.">Explain the MUX / circuit</button>
+            </div>
+            <form id="chat-form" class="chat-input-bar" autocomplete="off">
+                <input id="chat-input" type="text" maxlength="2000" placeholder="Ask about what you see…" aria-label="Ask the AI helper">
+                <button type="submit" id="chat-send" class="chat-send" aria-label="Send message">➤</button>
+            </form>
+        </section>
+        <button type="button" id="chat-widget-toggle" class="chat-toggle" aria-label="Open AI helper" aria-expanded="false" aria-controls="chat-widget-card">
+            <span class="chat-toggle-icon" aria-hidden="true">💬</span>
+        </button>
+    </div>
 </body>
 </html>
