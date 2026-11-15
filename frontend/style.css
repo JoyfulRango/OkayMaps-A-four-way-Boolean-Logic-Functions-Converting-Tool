@@ -520,13 +520,6 @@ body {
 .chips{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center}
 .chips span{font-size:.8rem;font-weight:600;color:#334155;background:#ffffffb0;border:1px solid var(--line);
   padding:.3rem .75rem;border-radius:999px;backdrop-filter:blur(6px)}
-.auth-panel{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:.55rem;margin-top:1rem}
-.auth-panel #auth-status{font-size:.8rem;color:var(--muted);font-weight:600;margin-right:.2rem}
-.auth-button{display:inline-flex;align-items:center;justify-content:center;border:1px solid #cbd5e1;border-radius:999px;padding:.42rem .75rem;font:600 .78rem inherit;text-decoration:none;cursor:pointer;transition:transform .15s ease,box-shadow .15s ease}
-.auth-button:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(15,23,42,.12)}
-.github-auth{background:#111827;color:#fff;border-color:#111827}
-.gitlab-auth{background:#fc6d26;color:#fff;border-color:#fc6d26}
-.logout-auth{background:#fff;color:#475569}
 /* ---------- mode tabs (segmented control) ---------- */
 .mode-selector{width:min(100%,780px)!important;padding:6px;gap:6px!important;margin-bottom:1.25rem;
   background:#ffffffd9;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);backdrop-filter:blur(8px)}

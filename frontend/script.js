@@ -12,43 +12,6 @@
         let muxOutputView = "folded";  // output view: "folded" | "unfolded"
         let isKMapGeneratedSolution = false;
 
-        async function loadAuthState() {
-            const status = document.getElementById("auth-status");
-            const logout = document.getElementById("auth-logout");
-            const loginButtons = document.querySelectorAll(".github-auth, .gitlab-auth");
-            if (!status || !logout) return;
-            try {
-                const response = await fetch("/api/auth/me", { credentials: "same-origin" });
-                const data = await response.json();
-                if (data.authenticated && data.user) {
-                    status.textContent = `Signed in as ${data.user.name}`;
-                    loginButtons.forEach(button => { button.hidden = true; });
-                    logout.hidden = false;
-                } else {
-                    status.textContent = "Sign in to save your session";
-                    logout.hidden = true;
-                }
-            } catch (error) {
-                status.textContent = "Authentication unavailable";
-            }
-        }
-
-        async function signOut() {
-            await fetch("/auth/logout", { method: "POST", credentials: "same-origin" });
-            window.location.reload();
-        }
-
-        document.addEventListener("DOMContentLoaded", () => {
-            loadAuthState();
-            document.getElementById("auth-logout")?.addEventListener("click", signOut);
-            const params = new URLSearchParams(window.location.search);
-            if (params.has("auth_error")) {
-                const status = document.getElementById("auth-status");
-                if (status) status.textContent = "Sign-in failed; please try again";
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-        });
-
         function cancelCurrentAnimation() {
             activeAnimationTimeouts.forEach(t => clearTimeout(t));
             activeAnimationTimeouts = [];

@@ -2,172 +2,18 @@ import json
 import logging
 import os
 import re
-import base64
-import hashlib
-import hmac
-import secrets
-import urllib.error
-import urllib.parse
-import urllib.request
 from pathlib import Path
 from typing import Dict, FrozenSet, Tuple
 import itertools 
 
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 app = FastAPI()
-
-
-# OAuth configuration. Set these in Render's environment variables; never commit
-# provider secrets to the repository.
-OAUTH_SESSION_SECRET = os.getenv("SESSION_SECRET", "local-development-session-secret")
-OAUTH_STATE_COOKIE = "oauth_state"
-AUTH_COOKIE = "okmaps_session"
-OAUTH_COOKIE_MAX_AGE = 600
-
-
-def _public_base_url(request: Request) -> str:
-    configured = os.getenv("APP_BASE_URL", "").strip().rstrip("/")
-    if configured:
-        return configured
-    return str(request.base_url).rstrip("/")
-
-
-def _oauth_redirect_uri(request: Request, provider: str) -> str:
-    return f"{_public_base_url(request)}/auth/{provider}/callback"
-
-
-def _oauth_config(provider: str) -> dict:
-    if provider == "github":
-        return {
-            "client_id": os.getenv("GITHUB_CLIENT_ID"),
-            "client_secret": os.getenv("GITHUB_CLIENT_SECRET"),
-            "authorize_url": "https://github.com/login/oauth/authorize",
-            "token_url": "https://github.com/login/oauth/access_token",
-            "user_url": "https://api.github.com/user",
-            "scope": "read:user user:email",
-        }
-    if provider == "gitlab":
-        return {
-            "client_id": os.getenv("GITLAB_CLIENT_ID"),
-            "client_secret": os.getenv("GITLAB_CLIENT_SECRET"),
-            "authorize_url": "https://gitlab.com/oauth/authorize",
-            "token_url": "https://gitlab.com/oauth/token",
-            "user_url": "https://gitlab.com/api/v4/user",
-            "scope": "read_user",
-        }
-    raise HTTPException(status_code=404, detail="Unsupported OAuth provider")
-
-
-def _oauth_request(url: str, data: dict | None = None, token: str | None = None) -> dict:
-    payload = urllib.parse.urlencode(data or {}).encode("utf-8") if data is not None else None
-    headers = {"Accept": "application/json", "User-Agent": "OKayMaps/1.0"}
-    if token:
-        headers["Authorization"] = f"Bearer {token}"
-    request = urllib.request.Request(url, data=payload, headers=headers, method="POST" if payload else "GET")
-    try:
-        with urllib.request.urlopen(request, timeout=15) as response:
-            return json.loads(response.read().decode("utf-8"))
-    except (urllib.error.HTTPError, urllib.error.URLError, json.JSONDecodeError) as exc:
-        logger.exception("OAuth provider request failed")
-        raise HTTPException(status_code=502, detail="OAuth provider request failed") from exc
-
-
-def _sign_session(payload: dict) -> str:
-    encoded = base64.urlsafe_b64encode(json.dumps(payload, separators=(",", ":")).encode()).decode().rstrip("=")
-    signature = hmac.new(OAUTH_SESSION_SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
-    return f"{encoded}.{signature}"
-
-
-def _read_session(request: Request) -> dict | None:
-    value = request.cookies.get(AUTH_COOKIE, "")
-    try:
-        encoded, signature = value.rsplit(".", 1)
-        expected = hmac.new(OAUTH_SESSION_SECRET.encode(), encoded.encode(), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(signature, expected):
-            return None
-        padded = encoded + "=" * (-len(encoded) % 4)
-        payload = json.loads(base64.urlsafe_b64decode(padded).decode())
-        if payload.get("exp", 0) < __import__("time").time():
-            return None
-        return payload
-    except (ValueError, TypeError, json.JSONDecodeError, base64.binascii.Error):
-        return None
-
-
-@app.get("/auth/{provider}")
-def oauth_login(provider: str, request: Request):
-    config = _oauth_config(provider)
-    if not config["client_id"] or not config["client_secret"]:
-        raise HTTPException(status_code=503, detail=f"{provider.title()} OAuth is not configured")
-    state = secrets.token_urlsafe(32)
-    params = {
-        "client_id": config["client_id"],
-        "redirect_uri": _oauth_redirect_uri(request, provider),
-        "response_type": "code",
-        "scope": config["scope"],
-        "state": state,
-    }
-    response = RedirectResponse(f"{config['authorize_url']}?{urllib.parse.urlencode(params)}")
-    response.set_cookie(OAUTH_STATE_COOKIE, f"{provider}:{state}", max_age=OAUTH_COOKIE_MAX_AGE,
-                        httponly=True, secure=_public_base_url(request).startswith("https://"), samesite="lax")
-    return response
-
-
-def _oauth_callback(provider: str, request: Request, code: str, state: str):
-    expected_state = request.cookies.get(OAUTH_STATE_COOKIE, "")
-    if not hmac.compare_digest(expected_state, f"{provider}:{state}"):
-        raise HTTPException(status_code=400, detail="Invalid OAuth state")
-    config = _oauth_config(provider)
-    token_data = _oauth_request(config["token_url"], {
-        "client_id": config["client_id"],
-        "client_secret": config["client_secret"],
-        "code": code,
-        "redirect_uri": _oauth_redirect_uri(request, provider),
-        "grant_type": "authorization_code",
-    })
-    access_token = token_data.get("access_token")
-    if not access_token:
-        raise HTTPException(status_code=502, detail="OAuth provider did not return an access token")
-    profile = _oauth_request(config["user_url"], token=access_token)
-    user = {
-        "provider": provider,
-        "id": str(profile.get("id", "")),
-        "name": profile.get("name") or profile.get("username") or profile.get("login") or "User",
-        "username": profile.get("username") or profile.get("login") or "",
-        "avatar_url": profile.get("avatar_url") or profile.get("avatar", ""),
-    }
-    session = {"user": user, "exp": __import__("time").time() + 604800}
-    response = RedirectResponse("/")
-    response.set_cookie(AUTH_COOKIE, _sign_session(session), max_age=604800,
-                        httponly=True, secure=_public_base_url(request).startswith("https://"), samesite="lax")
-    response.delete_cookie(OAUTH_STATE_COOKIE)
-    return response
-
-
-@app.get("/auth/{provider}/callback")
-def oauth_callback(provider: str, request: Request, code: str, state: str):
-    if provider not in ("github", "gitlab"):
-        raise HTTPException(status_code=404, detail="Unsupported OAuth provider")
-    return _oauth_callback(provider, request, code, state)
-
-
-@app.get("/api/auth/me")
-def auth_me(request: Request):
-    session = _read_session(request)
-    return {"authenticated": bool(session), "user": session.get("user") if session else None}
-
-
-@app.post("/auth/logout")
-def oauth_logout(request: Request):
-    response = RedirectResponse("/")
-    response.delete_cookie(AUTH_COOKIE, secure=_public_base_url(request).startswith("https://"), samesite="lax")
-    return response
 
 # Enable CORS for local HTML file access
 app.add_middleware(
