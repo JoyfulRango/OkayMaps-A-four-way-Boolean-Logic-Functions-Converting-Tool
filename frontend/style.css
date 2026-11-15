@@ -496,17 +496,14 @@ body {
   color: var(--ink);
   min-height: 100vh;
   padding: 0 1rem 2rem;
-  background: 
-    radial-gradient(rgba(37, 99, 235, 0.05) 1px, transparent 1px) 0 0 / 24px 24px,
-    radial-gradient(
-      ellipse at center, 
-      #ffffff 15%, 
-      #f1f9ff 40%, 
-      #d9eefe 65%, 
-      #b1dffd 85%, 
-      #8dd0fc 100%
-    );
-  background-attachment: fixed;
+  /* Faint blue lined grid background (CodeChef-style) */
+  background-color: #fbfdff;
+  background-image:
+    linear-gradient(rgba(37, 99, 235, 0.30) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(37, 99, 235, 0.30) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-position: -1px -1px;
+  background-attachment: scroll;
 }
 /* ---------- hero ---------- */
 .hero{text-align:center;padding:3.2rem 1rem 2rem;max-width:760px}
